@@ -8,6 +8,7 @@ env:
   ANDROID_NDK_VERSION: 'r25'
   LIBCXX_REPO: 'https://github.com/topjohnwu/libcxx.git'
   LIBCXX_DIR: 'libcxx'
+  API_LEVEL: '21'
 
 jobs:
   android:
@@ -27,13 +28,16 @@ jobs:
           submodules: recursive
 
       - name: Set up Android NDK
+        id: setup-ndk
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: ${{ env.ANDROID_NDK_VERSION }}
           add-to-path: true
 
-      - name: Set ANDROID_NDK_ROOT
-        run: echo "ANDROID_NDK_ROOT=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
+      - name: Set environment variables
+        run: |
+          echo "ANDROID_NDK_ROOT=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
+          echo "TARGET_ARCH=${{ matrix.id }}" >> $GITHUB_ENV
 
       - name: Install build dependencies
         run: |
@@ -42,26 +46,24 @@ jobs:
 
       - name: Clone custom libc++
         run: |
-          git clone ${{ env.LIBCXX_REPO }} ${{ env.LIBCXX_DIR }}
+          git clone --recursive ${{ env.LIBCXX_REPO }} ${{ env.LIBCXX_DIR }}
 
       - name: Build custom libc++
         run: |
-          mkdir -p ${{ env.LIBCXX_DIR }}/build
-          cd ${{ env.LIBCXX_DIR }}/build
-          cmake -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake \
-            -DANDROID_ABI=${{ matrix.id }} \
-            -DANDROID_PLATFORM=android-21 \
+          mkdir -p build_libcxx
+          cd build_libcxx
+          cmake ../${{ env.LIBCXX_DIR }} \
+            -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_ROOT}/build/cmake/android.toolchain.cmake \
+            -DANDROID_PLATFORM=android-${{ env.API_LEVEL }} \
+            -DANDROID_ABI=${{ env.TARGET_ARCH }} \
             -DCMAKE_BUILD_TYPE=Release \
-            ..
-          ninja
-        env:
-          ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_ROOT }}
+            -DCMAKE_INSTALL_PREFIX=../${{ env.LIBCXX_DIR }}/install
+          cmake --build . --target install
 
       - name: Build frida-gum with custom libc++
         run: |
-          export CXXFLAGS="-nostdinc++ -I${{ env.LIBCXX_DIR }}/include"
-          export LDFLAGS="-L${{ env.LIBCXX_DIR }}/build/lib"
+          export CXXFLAGS="-nostdinc++ -I${{ env.LIBCXX_DIR }}/install/include/c++/v1"
+          export LDFLAGS="-L${{ env.LIBCXX_DIR }}/install/lib -lc++_shared"
           ./configure --host=${{ matrix.id }} ${{ env.GUM_OPTIONS }}
           make
 
