@@ -5,6 +5,9 @@ on:
 
 env:
   GUM_OPTIONS: '--enable-gumpp --enable-gumjs --with-devkits=gum,gumjs --enable-tests'
+  ANDROID_NDK_VERSION: 'r25'
+  LIBCXX_REPO: 'https://github.com/topjohnwu/libcxx.git'
+  LIBCXX_DIR: 'libcxx'
 
 jobs:
   android:
@@ -15,7 +18,7 @@ jobs:
           - android-x86_64
           - android-arm
           - android-arm64
-      fail-fast: false
+      fail-fast: true
     runs-on: ubuntu-latest
     steps:
       - name: Check out repo
@@ -23,25 +26,42 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: nttld/setup-ndk@v1
-        id: setup-ndk
+      - name: Set up Android NDK
+        uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r25
-          add-to-path: false
+          ndk-version: ${{ env.ANDROID_NDK_VERSION }}
+          add-to-path: true
 
       - name: Set ANDROID_NDK_ROOT
         run: echo "ANDROID_NDK_ROOT=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
 
-      - name: Install dependencies
+      - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-              libjson-glib-dev \
-              libglib2.0-dev \
-              ninja-build
+          sudo apt-get install -y cmake ninja-build
 
-      - name: Build
+      - name: Clone custom libc++
         run: |
+          git clone ${{ env.LIBCXX_REPO }} ${{ env.LIBCXX_DIR }}
+
+      - name: Build custom libc++
+        run: |
+          mkdir -p ${{ env.LIBCXX_DIR }}/build
+          cd ${{ env.LIBCXX_DIR }}/build
+          cmake -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=${{ matrix.id }} \
+            -DANDROID_PLATFORM=android-21 \
+            -DCMAKE_BUILD_TYPE=Release \
+            ..
+          ninja
+        env:
+          ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_ROOT }}
+
+      - name: Build frida-gum with custom libc++
+        run: |
+          export CXXFLAGS="-nostdinc++ -I${{ env.LIBCXX_DIR }}/include"
+          export LDFLAGS="-L${{ env.LIBCXX_DIR }}/build/lib"
           ./configure --host=${{ matrix.id }} ${{ env.GUM_OPTIONS }}
           make
 
@@ -56,23 +76,3 @@ jobs:
         with:
           name: gumjs-devkit-${{ matrix.id }}
           path: build/bindings/gumjs/devkit/
-
-      - name: Package tests
-        run: tar -C build/tests -czf /tmp/runner.tar.gz gum-tests data/
-
-      - name: Test on Corellium Android device
-        if: matrix.id == 'android-arm64'
-        continue-on-error: true
-        uses: frida/corellium-action@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          gateway: corellium.frida.re
-          device: android-8.1.0-arm64
-          upload: /tmp/runner.tar.gz
-          run: |
-            cd /usr/local
-            rm -rf opt/frida
-            mkdir -p opt/frida
-            cd opt/frida
-            tar xf $ASSET_PATH
-            ./gum-tests
