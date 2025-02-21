@@ -1,12 +1,7 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
 
 env:
   GUM_OPTIONS: '--enable-gumpp --enable-gumjs --with-devkits=gum,gumjs --enable-tests'
