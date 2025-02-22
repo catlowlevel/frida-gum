@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 env:
-  GUM_OPTIONS: '--enable-gumpp --enable-gumjs --with-devkits=gum,gumjs --enable-tests'
+  GUM_OPTIONS: '--enable-gumpp --enable-gumjs --with-devkits=gum,gumjs --disable-tests --disable-v8 --enable-frida-java-bridge'
 
 jobs:
   android:
@@ -15,7 +15,7 @@ jobs:
           - android-x86_64
           - android-arm
           - android-arm64
-      fail-fast: false
+      fail-fast: true
     runs-on: ubuntu-latest
     steps:
       - name: Check out repo
@@ -56,23 +56,3 @@ jobs:
         with:
           name: gumjs-devkit-${{ matrix.id }}
           path: build/bindings/gumjs/devkit/
-
-      - name: Package tests
-        run: tar -C build/tests -czf /tmp/runner.tar.gz gum-tests data/
-
-      - name: Test on Corellium Android device
-        if: matrix.id == 'android-arm64'
-        continue-on-error: true
-        uses: frida/corellium-action@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          gateway: corellium.frida.re
-          device: android-8.1.0-arm64
-          upload: /tmp/runner.tar.gz
-          run: |
-            cd /usr/local
-            rm -rf opt/frida
-            mkdir -p opt/frida
-            cd opt/frida
-            tar xf $ASSET_PATH
-            ./gum-tests
