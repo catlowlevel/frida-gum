@@ -2,13 +2,18 @@ name: CI
 
 on:
   workflow_dispatch:
+    inputs:
+      upload_to_release:
+        description: 'Upload artifacts to GitHub release?'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 env:
-  GUM_OPTIONS: '--enable-gumpp --enable-gumjs --with-devkits=gum,gumjs --enable-tests'
-  ANDROID_NDK_VERSION: 'r25'
-  LIBCXX_REPO: 'https://github.com/topjohnwu/libcxx.git'
-  LIBCXX_DIR: 'libcxx'
-  API_LEVEL: '21'
+  GUM_OPTIONS: '--enable-gumpp --enable-gumjs --with-devkits=gum,gumjs --disable-tests --disable-v8 --enable-frida-java-bridge'
 
 jobs:
   android:
