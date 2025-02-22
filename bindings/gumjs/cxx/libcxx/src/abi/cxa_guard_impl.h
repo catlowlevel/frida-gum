@@ -55,7 +55,7 @@
 #  endif
 #endif
 
-#include <__thread/support.h>
+#include <__threading_support>
 #include <cstdint>
 #include <cstring>
 #include <limits.h>
@@ -255,7 +255,7 @@ struct InitByteNoThreads {
     if (*init_byte_address == COMPLETE_BIT)
       return true;
     if (*init_byte_address & PENDING_BIT)
-      ABORT_WITH_MESSAGE("__cxa_guard_acquire detected recursive initialization: do you have a function-local static variable whose initialization depends on that function?");
+      ABORT_WITH_MESSAGE("__cxa_guard_acquire detected recursive initialization");
     *init_byte_address = PENDING_BIT;
     return false;
   }
@@ -325,7 +325,7 @@ public:
     // Check for possible recursive initialization.
     if (has_thread_id_support && (*init_byte_address & PENDING_BIT)) {
       if (*thread_id_address == current_thread_id.get())
-        ABORT_WITH_MESSAGE("__cxa_guard_acquire detected recursive initialization: do you have a function-local static variable whose initialization depends on that function?");
+        ABORT_WITH_MESSAGE("__cxa_guard_acquire detected recursive initialization");
     }
 
     // Wait until the pending bit is not set.
@@ -460,7 +460,7 @@ public:
 
         // Check for recursive initialization
         if (has_thread_id_support && thread_id.load(std::_AO_Relaxed) == current_thread_id.get()) {
-          ABORT_WITH_MESSAGE("__cxa_guard_acquire detected recursive initialization: do you have a function-local static variable whose initialization depends on that function?");
+          ABORT_WITH_MESSAGE("__cxa_guard_acquire detected recursive initialization");
         }
 
         if ((last_val & WAITING_BIT) == 0) {
